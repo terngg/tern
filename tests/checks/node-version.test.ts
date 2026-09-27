@@ -44,4 +44,34 @@ describe('checks/node-version', () => {
 
     expect(result.message).toContain('.nvmrc');
   });
+
+  it('hints engine-strict when engines.node is set and .npmrc lacks engine-strict', async () => {
+    const result = await nodeVersionCheck.run({
+      cwd: testDir.path,
+      pkg: { engines: { node: '>=18.0.0' } },
+    });
+
+    expect(result.hint).toContain('engine-strict=true');
+  });
+
+  it('does not hint engine-strict when .npmrc already enables it', async () => {
+    await testDir.writeFile('.npmrc', 'engine-strict=true\n');
+
+    const result = await nodeVersionCheck.run({
+      cwd: testDir.path,
+      pkg: { engines: { node: '>=18.0.0' } },
+    });
+
+    expect(result.status).toBe('success');
+    expect(result.hint).toBeUndefined();
+  });
+
+  it('does not hint engine-strict when engines.node is absent', async () => {
+    const result = await nodeVersionCheck.run({
+      cwd: testDir.path,
+      pkg: {},
+    });
+
+    expect(result.hint).toBeUndefined();
+  });
 });

@@ -3,6 +3,23 @@ import path from 'node:path';
 import semver from 'semver';
 import type { CheckDefinition, CheckResult, CheckContext } from '../types/index.js';
 
+const ENGINE_STRICT_HINT =
+  "Add 'engine-strict=true' to .npmrc to prevent accidental installs on mismatched Node versions.";
+
+/** Returns true if .npmrc enables engine-strict=true (non-comment line). */
+async function hasEngineStrict(cwd: string): Promise<boolean> {
+  try {
+    const npmrc = await fs.readFile(path.join(cwd, '.npmrc'), 'utf8');
+    return npmrc.split(/\r?\n/).some((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return false;
+      return /^engine-strict\s*=\s*true\b/i.test(trimmed);
+    });
+  } catch {
+    return false;
+  }
+}
+
 export const nodeVersionCheck: CheckDefinition = {
   id: 'node-version',
   name: 'Node.js Version',
@@ -15,10 +32,11 @@ export const nodeVersionCheck: CheckDefinition = {
 
     let targetRange = context.config?.minNodeVersion || '>=18.0.0';
     let source = 'default';
+    const hasEnginesNode = Boolean(context.pkg?.engines?.node);
 
     // 1. Check package.json engines.node
-    if (context.pkg?.engines?.node) {
-      targetRange = context.pkg.engines.node;
+    if (hasEnginesNode) {
+      targetRange = context.pkg!.engines!.node as string;
       source = 'package.json engines';
     } else {
       // 2. Check .nvmrc
@@ -52,6 +70,15 @@ export const nodeVersionCheck: CheckDefinition = {
 
     const satisfies = semver.satisfies(cleanCurrent, targetRange, { loose: true });
 
+    // When engines.node is set, suggest engine-strict if not already enabled
+    let engineStrictHint: string | undefined;
+    if (hasEnginesNode) {
+      const strictEnabled = await hasEngineStrict(context.cwd);
+      if (!strictEnabled) {
+        engineStrictHint = ENGINE_STRICT_HINT;
+      }
+    }
+
     if (satisfies) {
       return {
         id: 'node-version',
@@ -60,6 +87,7 @@ export const nodeVersionCheck: CheckDefinition = {
         status: 'success',
         message: `Node.js ${currentVersion} (satisfies ${targetRange} from ${source})`,
         fixable: false,
+        ...(engineStrictHint ? { hint: engineStrictHint } : {}),
       };
     }
 
@@ -75,7 +103,9 @@ export const nodeVersionCheck: CheckDefinition = {
         `Consider switching version with 'nvm use' or 'fnm use'`,
       ],
       fixable: false,
-      hint: `Install the supported Node.js version using your version manager (nvm, fnm, or volta).`,
+      hint:
+        engineStrictHint ??
+        `Install the supported Node.js version using your version manager (nvm, fnm, or volta).`,
     };
   },
 };
