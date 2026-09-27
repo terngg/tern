@@ -315,6 +315,8 @@ tern port 3000 --kill
 tern port 3000 --kill --force --yes
 ```
 
+For Docker containers and WSL2 mirrored networking (where `wslhost.exe` or Docker proxies hold the port), see the [Docker & WSL2 port conflicts recipe](docs/recipes/docker-wsl2-ports.md).
+
 ---
 
 ### 11. `tern clean`
